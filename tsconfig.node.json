@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "allowSyntheticDefaultImports": true,
@@ -11,5 +11,5 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["electron", "electron.vite.config.ts", "playwright.config.ts"]
+  "include": ["electron", "src/cli", "src/node", "src/lib", "electron.vite.config.ts", "playwright.config.ts"]
 }

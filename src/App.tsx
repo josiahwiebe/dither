@@ -20,7 +20,10 @@ import { FileKindIcon } from "./components/FileKindIcon";
 import { StatusFilterBar } from "./components/StatusFilterBar";
 import { compareSources } from "./lib/compare";
 import { filterTreeNodes, searchNodes } from "./lib/filters";
+import { projectGitSession } from "./lib/gitSession";
 import { getBasename } from "./lib/path";
+import type { DesktopPickedSource } from "./electron/bridge";
+import type { DitherSession, GitSessionFile } from "./lib/gitSession";
 import type {
   ComparisonSession,
   ComparisonSource,
@@ -35,6 +38,9 @@ const themeStorageKey = "dither.theme";
 const logoUrl = `${import.meta.env.BASE_URL}dither-logo.svg`;
 const DiffPreview = lazy(() => import("./components/DiffPreview").then((module) => ({ default: module.DiffPreview })));
 const DirectoryTree = lazy(() => import("./components/DirectoryTree").then((module) => ({ default: module.DirectoryTree })));
+const GitDiffPreview = lazy(() =>
+  import("./components/GitDiffPreview").then((module) => ({ default: module.GitDiffPreview }))
+);
 type DiffViewMode = "split" | "unified";
 type DropTarget = "app" | "left" | "right";
 
@@ -125,6 +131,18 @@ function getHeaderIconPath(comparison: ReadyComparison | null, selectedNode: Dif
   return comparison.mode === "file" ? comparison.right.name : (selectedNode?.path ?? comparison.right.name);
 }
 
+function toDesktopComparisonSource(source: DesktopPickedSource): ComparisonSource {
+  return {
+    ...source,
+    id: `desktop:${source.kind}:${source.path}`
+  };
+}
+
+function getGitHeaderTitle(session: DitherSession | null, file: GitSessionFile | null) {
+  if (!session) return "Dither";
+  return file?.path ? getBasename(file.path) : session.title;
+}
+
 /** Coordinates source picking, comparison execution, and result selection. */
 export function App() {
   const adapter = useMemo(createFileSystemAdapter, []);
@@ -134,6 +152,7 @@ export function App() {
   const [theme, setTheme] = useState<"dark" | "light">(getInitialTheme);
   const [leftSource, setLeftSource] = useState<ComparisonSource | null>(null);
   const [rightSource, setRightSource] = useState<ComparisonSource | null>(null);
+  const [gitSession, setGitSession] = useState<DitherSession | null>(null);
   const [session, setSession] = useState<ComparisonSession>({ type: "idle" });
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("changed");
@@ -149,6 +168,25 @@ export function App() {
   }, [adapter.platform, theme]);
 
   useEffect(() => {
+    if (!window.dither) return;
+
+    let cancelled = false;
+    const loadSession = (nextSession: DitherSession) => {
+      if (!cancelled) void applyLaunchSession(nextSession);
+    };
+
+    window.dither.getLaunchSession().then((nextSession) => {
+      if (nextSession) loadSession(nextSession);
+    });
+    const unsubscribe = window.dither.onLaunchSession(loadSession);
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!leftSource || !rightSource || leftSource.kind !== rightSource.kind) {
       autoCompareKeyRef.current = null;
       return;
@@ -162,12 +200,21 @@ export function App() {
   }, [leftSource, rightSource]);
 
   const readyComparison = session.type === "ready" ? session : null;
-  const selectedNode = readyComparison?.nodes.find((node) => node.path === selectedPath) ?? readyComparison?.nodes[0] ?? null;
+  const gitProjection = useMemo(() => (gitSession ? projectGitSession(gitSession) : null), [gitSession]);
+  const gitFilesByPath = useMemo(
+    () => new Map(gitSession?.files.map((file) => [file.path, file]) ?? []),
+    [gitSession]
+  );
+  const selectedNode =
+    (gitProjection ?? readyComparison)?.nodes.find((node) => node.path === selectedPath) ??
+    (gitProjection ?? readyComparison)?.nodes[0] ??
+    null;
+  const selectedGitFile = selectedNode?.kind === "file" ? (gitFilesByPath.get(selectedNode.path) ?? null) : null;
 
   const visibleNodes = useMemo(() => {
-    if (!readyComparison) return [];
-    return searchNodes(filterTreeNodes(readyComparison.nodes, filter), query);
-  }, [filter, query, readyComparison]);
+    const nodes = gitProjection?.nodes ?? readyComparison?.nodes ?? [];
+    return searchNodes(filterTreeNodes(nodes, filter), query);
+  }, [filter, gitProjection, query, readyComparison]);
 
   async function pickSource(side: "left" | "right", kind?: SourceKind) {
     try {
@@ -177,6 +224,7 @@ export function App() {
       if (side === "left") setLeftSource(source);
       else setRightSource(source);
 
+      setGitSession(null);
       setSession({ type: "idle" });
       setSelectedPath(null);
     } catch (error) {
@@ -185,6 +233,39 @@ export function App() {
         type: "failed"
       });
     }
+  }
+
+  async function applyLaunchSession(nextSession: DitherSession) {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    autoCompareKeyRef.current = null;
+    setFilter("changed");
+    setQuery("");
+
+    if (nextSession.mode === "file-pair") {
+      if (!window.dither) return;
+      const sources = await window.dither.resolvePaths([nextSession.leftPath, nextSession.rightPath]);
+      const [left, right] = sources.map(toDesktopComparisonSource);
+
+      if (!left || !right || left.kind !== right.kind) {
+        setSession({ error: "Unable to load the requested file comparison.", type: "failed" });
+        return;
+      }
+
+      setGitSession(null);
+      setLeftSource(left);
+      setRightSource(right);
+      setSession({ type: "idle" });
+      setSelectedPath(null);
+      return;
+    }
+
+    const projection = projectGitSession(nextSession);
+    setLeftSource(null);
+    setRightSource(null);
+    setGitSession(nextSession);
+    setSession({ type: "idle" });
+    setSelectedPath(projection.selectedPath);
   }
 
   async function runComparison(
@@ -231,6 +312,7 @@ export function App() {
     autoCompareKeyRef.current = null;
     setLeftSource(null);
     setRightSource(null);
+    setGitSession(null);
     setSession({ type: "idle" });
     setSelectedPath(null);
     setFilter("changed");
@@ -264,6 +346,7 @@ export function App() {
 
       setLeftSource(firstSource);
       setRightSource(secondSource);
+      setGitSession(null);
       setSession({ type: "idle" });
       setSelectedPath(null);
       return;
@@ -277,6 +360,7 @@ export function App() {
       setLeftSource(firstSource);
     }
 
+    setGitSession(null);
     setSession({ type: "idle" });
     setSelectedPath(null);
   }
@@ -317,25 +401,37 @@ export function App() {
     setDropTarget(getTargetedDropZone(event));
   }
 
+  function handleGitSessionChange(nextSession: DitherSession) {
+    const projection = projectGitSession(nextSession);
+    setGitSession(nextSession);
+    setSelectedPath((currentPath) =>
+      currentPath && nextSession.files.some((file) => file.path === currentPath) ? currentPath : projection.selectedPath
+    );
+  }
+
   const canCompare = Boolean(leftSource && rightSource);
+  const hasGitSession = gitSession !== null;
+  const hasDiffSession = canCompare || hasGitSession;
   const isDropActive = dropTarget !== null;
   const dropOverlayCopy = getDropOverlayCopy(dropTarget);
-  const headerTitle = getHeaderTitle(readyComparison, selectedNode);
-  const headerIconPath = getHeaderIconPath(readyComparison, selectedNode);
+  const headerTitle = gitSession ? getGitHeaderTitle(gitSession, selectedGitFile) : getHeaderTitle(readyComparison, selectedNode);
+  const headerIconPath = gitSession ? (selectedGitFile?.path ?? "dither") : getHeaderIconPath(readyComparison, selectedNode);
   const headerSubtitle =
     session.type === "scanning"
       ? session.message
-      : readyComparison
-        ? formatDiffSummary(readyComparison.summary)
+      : gitProjection
+        ? `${gitSession?.title ?? "Git session"} / ${formatDiffSummary(gitProjection.summary)}`
+        : readyComparison
+          ? formatDiffSummary(readyComparison.summary)
         : "";
-  const hasSources = Boolean(leftSource || rightSource);
+  const hasSources = Boolean(leftSource || rightSource || gitSession);
   const pendingSide: "left" | "right" = leftSource && !rightSource ? "right" : "left";
   const pendingLabel = pendingSide === "left" ? "original" : "changed";
   const selectedSource = leftSource ?? rightSource;
   const isDesktop = adapter.platform === "desktop";
   const canReset = hasSources || readyComparison !== null || session.type !== "idle";
   const showWebHeaderSecondary =
-    !isDesktop && (readyComparison !== null || hasSources || session.type === "scanning");
+    !isDesktop && (readyComparison !== null || gitSession !== null || hasSources || session.type === "scanning");
 
   const themeToggle = (
     <button
@@ -351,18 +447,22 @@ export function App() {
   const comparisonToolbar = (
     <div className="top-bar__actions">
       <div className="toolbar-pillbar" role="toolbar" aria-label="Comparison toolbar">
-        {canCompare ? (
+        {hasDiffSession ? (
           <>
-            <button
-              type="button"
-              className="toolbar-pillbar__button"
-              aria-label="Swap comparison sides"
-              disabled={!leftSource || !rightSource || session.type === "scanning"}
-              onClick={swapSources}
-            >
-              <ArrowLeftRight size={16} aria-hidden="true" />
-            </button>
-            <span className="toolbar-pillbar__divider" aria-hidden="true" />
+            {canCompare ? (
+              <>
+                <button
+                  type="button"
+                  className="toolbar-pillbar__button"
+                  aria-label="Swap comparison sides"
+                  disabled={!leftSource || !rightSource || session.type === "scanning"}
+                  onClick={swapSources}
+                >
+                  <ArrowLeftRight size={16} aria-hidden="true" />
+                </button>
+                <span className="toolbar-pillbar__divider" aria-hidden="true" />
+              </>
+            ) : null}
             <div className="toolbar-pillbar__group" role="group" aria-label="Diff layout">
               <button
                 type="button"
@@ -397,7 +497,7 @@ export function App() {
         ) : null}
         {hasSources ? (
           <>
-            {canCompare ? <span className="toolbar-pillbar__divider" aria-hidden="true" /> : null}
+            {hasDiffSession ? <span className="toolbar-pillbar__divider" aria-hidden="true" /> : null}
             <button
               type="button"
               className="toolbar-pillbar__button"
@@ -408,7 +508,7 @@ export function App() {
             </button>
           </>
         ) : null}
-        {isDesktop && (canCompare || hasSources) ? <span className="toolbar-pillbar__divider" aria-hidden="true" /> : null}
+        {isDesktop && (hasDiffSession || hasSources) ? <span className="toolbar-pillbar__divider" aria-hidden="true" /> : null}
         {isDesktop ? themeToggle : null}
       </div>
     </div>
@@ -427,7 +527,7 @@ export function App() {
         <header
           className={
             isDesktop
-              ? readyComparison
+              ? readyComparison || gitSession
                 ? "top-bar top-bar--comparison"
                 : "top-bar"
               : "top-bar top-bar--browser"
@@ -436,8 +536,8 @@ export function App() {
           {isDesktop ? <div className="traffic-spacer" aria-hidden="true" /> : null}
           {isDesktop ? (
             <>
-              <div className={readyComparison ? "header-title header-title--comparison" : "brand-lockup"}>
-                {readyComparison ? (
+              <div className={readyComparison || gitSession ? "header-title header-title--comparison" : "brand-lockup"}>
+                {readyComparison || gitSession ? (
                   <>
                     <FileKindIcon path={headerIconPath} variant="header" />
                     <div>
@@ -471,7 +571,7 @@ export function App() {
               </div>
               {showWebHeaderSecondary ? (
                 <div className="top-bar__secondary">
-                  {readyComparison ? (
+                  {readyComparison || gitSession ? (
                     <div className="header-title header-title--comparison">
                       <FileKindIcon path={headerIconPath} variant="header" />
                       <div>
@@ -506,8 +606,8 @@ export function App() {
         </div>
       ) : null}
 
-      <section className={readyComparison?.mode === "directory" ? "workspace" : "workspace workspace--single"}>
-        {readyComparison?.mode === "directory" ? (
+      <section className={gitProjection || readyComparison?.mode === "directory" ? "workspace" : "workspace workspace--single"}>
+        {gitProjection || readyComparison?.mode === "directory" ? (
           <aside className="tree-pane">
             <div className="pane-toolbar">
               <div className="search-box">
@@ -521,7 +621,17 @@ export function App() {
                 />
               </div>
             </div>
-            <StatusFilterBar active={filter} summary={readyComparison.summary} onChange={setFilter} />
+            <StatusFilterBar active={filter} summary={(gitProjection ?? readyComparison)?.summary ?? {
+              binary: 0,
+              equal: 0,
+              error: 0,
+              leftOnly: 0,
+              modified: 0,
+              rightOnly: 0,
+              skipped: 0,
+              total: 0,
+              typeChanged: 0
+            }} onChange={setFilter} />
             <Suspense fallback={<div className="empty-tree">Loading tree</div>}>
               <DirectoryTree
                 nodes={visibleNodes}
@@ -534,7 +644,26 @@ export function App() {
         ) : null}
 
         <section className="preview-pane" aria-label="Diff preview">
-          {readyComparison ? (
+          {gitSession ? (
+            <Suspense
+              fallback={
+                <div className="preview-empty">
+                  <Loader2 className="spin" size={26} aria-hidden="true" />
+                  <span>Loading git diff renderer</span>
+                </div>
+              }
+            >
+              <GitDiffPreview
+                collapseUnchanged={collapseUnchanged}
+                diffViewMode={diffViewMode}
+                file={selectedGitFile}
+                onError={(error) => setSession({ error, type: "failed" })}
+                onSessionChange={handleGitSessionChange}
+                session={gitSession}
+                theme={theme}
+              />
+            </Suspense>
+          ) : readyComparison ? (
             <Suspense
               fallback={
                 <div className="preview-empty">

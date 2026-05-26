@@ -5,11 +5,16 @@
   "type": "module",
   "author": "Josiah Wiebe",
   "main": "out/main/index.js",
+  "bin": {
+    "dither": "./bin/dither.js",
+    "dt": "./bin/dither.js"
+  },
   "description": "Local-first file and directory diff app for web and macOS.",
   "scripts": {
     "dev": "electron-vite dev",
     "dev:web": "vite --host 127.0.0.1",
-    "build": "bun run build:web && bun run build:desktop",
+    "build": "bun run build:web && bun run build:cli && bun run build:desktop",
+    "build:cli": "bun build ./src/cli/main.ts --target=node --outfile=out/cli/dither.js",
     "build:web": "vite build",
     "build:desktop": "electron-vite build && electron-builder --mac dir",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",

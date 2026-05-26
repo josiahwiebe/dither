@@ -12,11 +12,15 @@ import type {
   DesktopSourceKind,
   DesktopWalkEntry
 } from "../src/electron/bridge";
+import { isDitherSession, type DitherSession, type GitActionKind } from "../src/lib/gitSession";
+import { performGitAction, readSessionFile } from "../src/node/gitWorkbench";
 
 const isDev = !app.isPackaged;
 const shouldOpenDevTools = process.env.DITHER_OPEN_DEVTOOLS === "1";
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const macOSWindowMaterial = "fullscreen-ui" satisfies NonNullable<BrowserWindowConstructorOptions["vibrancy"]>;
+let activeSession: DitherSession | null = null;
+let mainWindow: BrowserWindow | null = null;
 
 /** Returns native window material settings without painting over macOS vibrancy. */
 function windowMaterialOptions(): BrowserWindowConstructorOptions {
@@ -34,8 +38,43 @@ function windowMaterialOptions(): BrowserWindowConstructorOptions {
   };
 }
 
+function getSessionPathFromUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "dither:" && url.hostname === "session" ? url.searchParams.get("path") : null;
+  } catch {
+    return null;
+  }
+}
+
+function getSessionPathFromArgs(argv: string[]) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const current = argv[index];
+    if (current === "--session") return argv[index + 1] ?? null;
+    if (current.startsWith("dither://")) return getSessionPathFromUrl(current);
+  }
+
+  return null;
+}
+
+async function loadActiveSession(sessionPath: string | null) {
+  if (!sessionPath) return;
+  activeSession = await readSessionFile(sessionPath);
+  mainWindow?.webContents.send("dither:launch-session", activeSession);
+  mainWindow?.focus();
+}
+
+function registerProtocolClient() {
+  if (process.defaultApp && process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient("dither", process.execPath, [process.argv[1]]);
+    return;
+  }
+
+  app.setAsDefaultProtocolClient("dither");
+}
+
 function createWindow() {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1240,
     height: 840,
     minWidth: 920,
@@ -71,6 +110,12 @@ function createWindow() {
   } else {
     void mainWindow.loadFile(join(currentDirectory, "../renderer/index.html"));
   }
+
+  mainWindow.webContents.once("did-finish-load", () => {
+    if (activeSession) {
+      mainWindow?.webContents.send("dither:launch-session", activeSession);
+    }
+  });
 
   return mainWindow;
 }
@@ -235,6 +280,64 @@ ipcMain.handle("dither:pick-source", async (_event, kind?: DesktopSourceKind) =>
   return toDroppedSource(result.filePaths[0]);
 });
 
+ipcMain.handle("dither:get-launch-session", () => activeSession);
+
+ipcMain.handle("dither:resolve-paths", async (_event, paths: unknown) => {
+  if (!Array.isArray(paths)) return [];
+
+  const sources = await Promise.all(
+    paths
+      .filter((path): path is string => typeof path === "string" && path.length > 0)
+      .slice(0, 2)
+      .map(async (path) => {
+        try {
+          return await toDroppedSource(path);
+        } catch {
+          return null;
+        }
+      })
+  );
+
+  return sources.filter((source): source is DesktopPickedSource => Boolean(source));
+});
+
+ipcMain.handle("dither:read-git-file", async (_event, repoPath: unknown, relativePath: unknown) => {
+  if (typeof repoPath !== "string" || typeof relativePath !== "string") {
+    throw new Error("Repository path and file path are required.");
+  }
+
+  const path = resolve(repoPath, relativePath);
+  assertPathInside(repoPath, path);
+  return readFilePayload(path);
+});
+
+ipcMain.handle("dither:perform-git-action", async (_event, request: unknown) => {
+  if (!request || typeof request !== "object") throw new Error("Git action request required.");
+  const actionRequest = request as {
+    action?: GitActionKind;
+    filePath?: string;
+    hunkIndex?: number;
+    session?: DitherSession;
+  };
+
+  if (
+    !["stage", "unstage", "discard", "apply"].includes(actionRequest.action ?? "") ||
+    typeof actionRequest.filePath !== "string" ||
+    !isDitherSession(actionRequest.session)
+  ) {
+    throw new Error("Invalid git action request.");
+  }
+
+  activeSession = await performGitAction({
+    action: actionRequest.action as GitActionKind,
+    filePath: actionRequest.filePath,
+    hunkIndex: actionRequest.hunkIndex,
+    session: actionRequest.session
+  });
+  mainWindow?.webContents.send("dither:launch-session", activeSession);
+  return activeSession;
+});
+
 ipcMain.handle("dither:read-file", async (_event, source: DesktopPickedSource, relativePath?: string) => {
   const path =
     source.kind === "directory"
@@ -276,7 +379,23 @@ ipcMain.handle("dither:walk-directory", async (_event, source: DesktopPickedSour
   return walkDirectory(source.path);
 });
 
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  void loadActiveSession(getSessionPathFromUrl(url));
+});
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
+app.on("second-instance", (_event, argv) => {
+  void loadActiveSession(getSessionPathFromArgs(argv));
+});
+
 app.whenReady().then(() => {
+  registerProtocolClient();
+  void loadActiveSession(getSessionPathFromArgs(process.argv));
   createWindow();
   void mkdir(app.getPath("userData"), { recursive: true });
 

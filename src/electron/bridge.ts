@@ -1,3 +1,5 @@
+import type { DitherSession, GitActionKind } from "../lib/gitSession";
+
 export type DesktopSourceKind = "file" | "directory";
 
 export interface DesktopPickedSource {
@@ -27,8 +29,18 @@ export interface DesktopWalkEntry {
 }
 
 export interface DitherDesktopBridge {
+  getLaunchSession(): Promise<DitherSession | null>;
+  onLaunchSession(callback: (session: DitherSession) => void): () => void;
+  performGitAction(request: {
+    action: GitActionKind;
+    filePath: string;
+    hunkIndex?: number;
+    session: DitherSession;
+  }): Promise<DitherSession>;
   pickSource(kind?: DesktopSourceKind): Promise<DesktopPickedSource | null>;
+  readGitFile(repoPath: string, relativePath: string): Promise<DesktopFilePayload>;
   readFile(source: DesktopPickedSource, relativePath?: string): Promise<DesktopFilePayload>;
+  resolvePaths(paths: readonly string[]): Promise<DesktopPickedSource[]>;
   resolveDroppedSources(files: readonly File[]): Promise<DesktopPickedSource[]>;
   walkDirectory(source: DesktopPickedSource): Promise<DesktopWalkEntry[]>;
 }
