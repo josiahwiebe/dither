@@ -8,8 +8,11 @@ import {
   type LucideIcon
 } from "lucide-react";
 
+import { getBasename } from "../lib/path";
+
 interface FileKindIconProps {
   path: string;
+  variant?: "badge" | "header";
 }
 
 interface FileKind {
@@ -67,10 +70,6 @@ const namedFileKinds: Record<string, FileKind> = {
   package: { Icon: Braces, label: "PKG", tone: "data" }
 };
 
-function getBasename(path: string) {
-  return path.split(/[\\/]/).at(-1) ?? path;
-}
-
 function getExtension(path: string) {
   const basename = getBasename(path).toLowerCase();
   if (basename.endsWith(".d.ts")) return "ts";
@@ -78,7 +77,7 @@ function getExtension(path: string) {
 }
 
 /** Renders a compact icon and extension badge for common file types. */
-export function FileKindIcon({ path }: FileKindIconProps) {
+export function FileKindIcon({ path, variant = "badge" }: FileKindIconProps) {
   const basename = getBasename(path).toLowerCase();
   const kind =
     namedFileKinds[basename] ??
@@ -86,6 +85,13 @@ export function FileKindIcon({ path }: FileKindIconProps) {
     fileKindsByExtension[getExtension(path)] ??
     ({ Icon: FileText, label: "FILE", tone: "text" } satisfies FileKind);
   const { Icon } = kind;
+  if (variant === "header") {
+    return (
+      <span className="header-file-icon" data-kind={kind.tone} aria-hidden="true">
+        <Icon size={16} strokeWidth={1.85} />
+      </span>
+    );
+  }
 
   return (
     <span className="file-kind-icon" data-kind={kind.tone} aria-hidden="true">

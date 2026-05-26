@@ -21,6 +21,7 @@ import { SourceSlot } from "./components/SourceSlot";
 import { StatusFilterBar } from "./components/StatusFilterBar";
 import { compareSources } from "./lib/compare";
 import { filterTreeNodes, searchNodes } from "./lib/filters";
+import { getBasename } from "./lib/path";
 import type {
   ComparisonSession,
   ComparisonSource,
@@ -107,13 +108,17 @@ function getHeaderTitle(comparison: ReadyComparison | null, selectedNode: DiffNo
   if (!comparison) return "Dither";
 
   if (comparison.mode === "file") {
-    const leftLabel = comparison.left.displayPath;
-    const rightLabel = comparison.right.displayPath;
+    const leftLabel = getBasename(comparison.left.displayPath);
+    const rightLabel = getBasename(comparison.right.displayPath);
 
     return leftLabel === rightLabel ? leftLabel : `${leftLabel} / ${rightLabel}`;
   }
 
-  return selectedNode?.path ?? `${comparison.left.displayPath} / ${comparison.right.displayPath}`;
+  if (selectedNode?.path) return getBasename(selectedNode.path);
+
+  const leftLabel = getBasename(comparison.left.displayPath);
+  const rightLabel = getBasename(comparison.right.displayPath);
+  return `${leftLabel} / ${rightLabel}`;
 }
 
 function getHeaderIconPath(comparison: ReadyComparison | null, selectedNode: DiffNode | null) {
@@ -328,6 +333,88 @@ export function App() {
   const pendingSide: "left" | "right" = leftSource && !rightSource ? "right" : "left";
   const pendingLabel = pendingSide === "left" ? "original" : "changed";
   const selectedSource = leftSource ?? rightSource;
+  const isDesktop = adapter.platform === "desktop";
+  const canReset = hasSources || readyComparison !== null || session.type !== "idle";
+  const showSourceGrid = !canCompare;
+  const showWebHeaderSecondary =
+    !isDesktop && (readyComparison !== null || hasSources || session.type === "scanning");
+
+  const themeToggle = (
+    <button
+      type="button"
+      className="toolbar-pillbar__button"
+      aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+      onClick={() => setTheme((value) => (value === "dark" ? "light" : "dark"))}
+    >
+      {theme === "dark" ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
+    </button>
+  );
+
+  const comparisonToolbar = (
+    <div className="top-bar__actions">
+      <div className="toolbar-pillbar" role="toolbar" aria-label="Comparison toolbar">
+        {canCompare ? (
+          <>
+            <button
+              type="button"
+              className="toolbar-pillbar__button"
+              aria-label="Swap comparison sides"
+              disabled={!leftSource || !rightSource || session.type === "scanning"}
+              onClick={swapSources}
+            >
+              <ArrowLeftRight size={16} aria-hidden="true" />
+            </button>
+            <span className="toolbar-pillbar__divider" aria-hidden="true" />
+            <div className="toolbar-pillbar__group" role="group" aria-label="Diff layout">
+              <button
+                type="button"
+                className={diffViewMode === "split" ? "toolbar-pillbar__button is-active" : "toolbar-pillbar__button"}
+                aria-pressed={diffViewMode === "split"}
+                aria-label="Split diff"
+                onClick={() => setDiffViewMode("split")}
+              >
+                <Columns2 size={16} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className={diffViewMode === "unified" ? "toolbar-pillbar__button is-active" : "toolbar-pillbar__button"}
+                aria-pressed={diffViewMode === "unified"}
+                aria-label="Unified diff"
+                onClick={() => setDiffViewMode("unified")}
+              >
+                <Rows3 size={16} aria-hidden="true" />
+              </button>
+            </div>
+            <span className="toolbar-pillbar__divider" aria-hidden="true" />
+            <button
+              type="button"
+              className={collapseUnchanged ? "toolbar-pillbar__button is-active" : "toolbar-pillbar__button"}
+              aria-label={collapseUnchanged ? "Show unchanged lines" : "Collapse unchanged lines"}
+              aria-pressed={collapseUnchanged}
+              onClick={() => setCollapseUnchanged((value) => !value)}
+            >
+              <ListCollapse size={16} aria-hidden="true" />
+            </button>
+          </>
+        ) : null}
+        {hasSources ? (
+          <>
+            {canCompare ? <span className="toolbar-pillbar__divider" aria-hidden="true" /> : null}
+            <button
+              type="button"
+              className="toolbar-pillbar__button"
+              aria-label="Reset comparison"
+              onClick={resetComparison}
+            >
+              <RotateCcw size={16} aria-hidden="true" />
+            </button>
+          </>
+        ) : null}
+        {isDesktop && (canCompare || hasSources) ? <span className="toolbar-pillbar__divider" aria-hidden="true" /> : null}
+        {isDesktop ? themeToggle : null}
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -339,103 +426,94 @@ export function App() {
         onDrop={(event) => void acceptDrop(event, getTargetedDropZone(event))}
       >
         <div className="liquid-veil" aria-hidden="true" />
-        <header className={readyComparison ? "top-bar top-bar--comparison" : "top-bar"}>
-        <div className="traffic-spacer" aria-hidden="true" />
-        <div className={readyComparison ? "header-title header-title--comparison" : "brand-lockup"}>
-          {readyComparison ? (
+        <header
+          className={
+            isDesktop
+              ? readyComparison
+                ? "top-bar top-bar--comparison"
+                : "top-bar"
+              : "top-bar top-bar--browser"
+          }
+        >
+          {isDesktop ? <div className="traffic-spacer" aria-hidden="true" /> : null}
+          {isDesktop ? (
             <>
-              <FileKindIcon path={headerIconPath} />
-              <div>
-                <strong>{headerTitle}</strong>
-                <span>{headerSubtitle}</span>
+              <div className={readyComparison ? "header-title header-title--comparison" : "brand-lockup"}>
+                {readyComparison ? (
+                  <>
+                    <FileKindIcon path={headerIconPath} variant="header" />
+                    <div>
+                      <strong>{headerTitle}</strong>
+                      <span>{headerSubtitle}</span>
+                    </div>
+                  </>
+                ) : (
+                  <img className="brand-logo" src={logoUrl} alt="Dither" />
+                )}
               </div>
+              {comparisonToolbar}
             </>
           ) : (
-            <img className="brand-logo" src={logoUrl} alt="Dither" />
-          )}
-        </div>
-        <div className="top-bar__actions">
-          {canCompare ? (
             <>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="Swap comparison sides"
-                disabled={!leftSource || !rightSource || session.type === "scanning"}
-                onClick={swapSources}
-              >
-                <ArrowLeftRight size={17} aria-hidden="true" />
-              </button>
-              <div className="segmented-icon-control" aria-label="Diff layout">
+              <div className="top-bar__masthead">
                 <button
                   type="button"
-                  aria-pressed={diffViewMode === "split"}
-                  aria-label="Split diff"
-                  className={diffViewMode === "split" ? "is-active" : undefined}
-                  onClick={() => setDiffViewMode("split")}
+                  className="brand-lockup brand-lockup--home"
+                  aria-label="Return to start"
+                  disabled={!canReset}
+                  onClick={resetComparison}
                 >
-                  <Columns2 size={16} aria-hidden="true" />
+                  <img className="brand-logo" src={logoUrl} alt="Dither" />
                 </button>
-                <button
-                  type="button"
-                  aria-pressed={diffViewMode === "unified"}
-                  aria-label="Unified diff"
-                  className={diffViewMode === "unified" ? "is-active" : undefined}
-                  onClick={() => setDiffViewMode("unified")}
-                >
-                  <Rows3 size={16} aria-hidden="true" />
-                </button>
+                <div className="top-bar__actions">
+                  <div className="toolbar-pillbar" role="toolbar" aria-label="App toolbar">
+                    {themeToggle}
+                  </div>
+                </div>
               </div>
-              <button
-                type="button"
-                className={collapseUnchanged ? "icon-button is-active" : "icon-button"}
-                aria-label={collapseUnchanged ? "Show unchanged lines" : "Collapse unchanged lines"}
-                aria-pressed={collapseUnchanged}
-                onClick={() => setCollapseUnchanged((value) => !value)}
-              >
-                <ListCollapse size={17} aria-hidden="true" />
-              </button>
+              {showWebHeaderSecondary ? (
+                <div className="top-bar__secondary">
+                  {readyComparison ? (
+                    <div className="header-title header-title--comparison">
+                      <FileKindIcon path={headerIconPath} variant="header" />
+                      <div>
+                        <strong>{headerTitle}</strong>
+                        <span>{headerSubtitle}</span>
+                      </div>
+                    </div>
+                  ) : session.type === "scanning" ? (
+                    <div className="header-title header-title--status" role="status">
+                      <Loader2 className="spin" size={16} aria-hidden="true" />
+                      <span>{session.message}</span>
+                    </div>
+                  ) : null}
+                  {comparisonToolbar}
+                </div>
+              ) : null}
             </>
-          ) : null}
-          {hasSources ? (
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Reset comparison"
-              onClick={resetComparison}
-            >
-              <RotateCcw size={17} aria-hidden="true" />
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="icon-button"
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-            onClick={() => setTheme((value) => (value === "dark" ? "light" : "dark"))}
-          >
-            {theme === "dark" ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
-          </button>
-        </div>
-      </header>
+          )}
+        </header>
 
-      <section className="source-grid" aria-label="Comparison sources">
-        <SourceSlot
-          isDragActive={dropTarget === "left" || dropTarget === "app"}
-          side="left"
-          source={leftSource}
-          onPick={() => void pickSource("left")}
-          onSourceDragHover={(event) => setDropTarget(getTargetedDropZone(event))}
-          onSourceDrop={(event) => void acceptDrop(event, "left")}
-        />
-        <SourceSlot
-          isDragActive={dropTarget === "right" || dropTarget === "app"}
-          side="right"
-          source={rightSource}
-          onPick={() => void pickSource("right")}
-          onSourceDragHover={(event) => setDropTarget(getTargetedDropZone(event))}
-          onSourceDrop={(event) => void acceptDrop(event, "right")}
-        />
-      </section>
+      {showSourceGrid ? (
+        <section className="source-grid" aria-label="Comparison sources">
+          <SourceSlot
+            isDragActive={dropTarget === "left" || dropTarget === "app"}
+            side="left"
+            source={leftSource}
+            onPick={() => void pickSource("left")}
+            onSourceDragHover={(event) => setDropTarget(getTargetedDropZone(event))}
+            onSourceDrop={(event) => void acceptDrop(event, "left")}
+          />
+          <SourceSlot
+            isDragActive={dropTarget === "right" || dropTarget === "app"}
+            side="right"
+            source={rightSource}
+            onPick={() => void pickSource("right")}
+            onSourceDragHover={(event) => setDropTarget(getTargetedDropZone(event))}
+            onSourceDrop={(event) => void acceptDrop(event, "right")}
+          />
+        </section>
+      ) : null}
 
       {session.type === "failed" ? (
         <div className="error-banner" role="alert">

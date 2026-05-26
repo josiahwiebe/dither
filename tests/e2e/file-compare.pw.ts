@@ -42,7 +42,7 @@ test("supports header controls and custom diff headers", async ({ page }, testIn
   await page.getByRole("region", { name: "Changed source" }).getByRole("button", { name: "Open" }).click();
   await (await rightChooserPromise).setFiles(rightFile);
 
-  await expect(page.getByText("controls-left.tsx / controls-right.tsx")).toBeVisible();
+  await expect(page.locator(".top-bar").getByText("controls-left.tsx / controls-right.tsx")).toBeVisible();
   await expect(page.getByText("1 additions")).toBeVisible();
   await expect(page.getByText("1 deletions")).toBeVisible();
   await expect(page.getByText("2 changes")).toBeVisible();
@@ -69,8 +69,9 @@ test("supports header controls and custom diff headers", async ({ page }, testIn
   await expect(page.getByRole("button", { name: "Collapse unchanged lines" })).toHaveAttribute("aria-pressed", "false");
 
   await page.getByRole("button", { name: "Swap comparison sides" }).click();
-  await expect(page.getByRole("region", { name: "Original source" }).locator("strong")).toHaveText("controls-right.tsx");
-  await expect(page.getByRole("region", { name: "Changed source" }).locator("strong")).toHaveText("controls-left.tsx");
+  await expect(page.locator(".top-bar").getByText("controls-right.tsx / controls-left.tsx")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Original source" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Changed source" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Reset comparison" }).click();
   await expect(page.getByRole("region", { name: "Original source" }).locator("strong")).toHaveText("No source selected");
@@ -102,8 +103,9 @@ test("loads a dropped browser file pair", async ({ page }) => {
   expect(Math.round(overlayBox?.height ?? -1)).toBe((viewport?.height ?? 0) - 24);
 
   await page.locator(".app-shell").dispatchEvent("drop", { dataTransfer });
-  await expect(page.getByRole("region", { name: "Original source" }).locator("strong")).toHaveText("drop-left.txt");
-  await expect(page.getByRole("region", { name: "Changed source" }).locator("strong")).toHaveText("drop-right.txt");
+  await expect(page.locator(".top-bar").getByText("drop-left.txt / drop-right.txt")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Original source" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Changed source" })).toHaveCount(0);
 
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(page.getByText("bravo dropped")).toBeVisible();
@@ -142,12 +144,14 @@ test("compares after two separate browser file drops", async ({ page }) => {
   expect(Math.round(rightOverlayBox?.x ?? -1)).toBe(Math.round((viewport?.width ?? 0) / 2 + 4));
 
   await page.locator(".app-shell").dispatchEvent("drop", { clientX: 900, dataTransfer: rightTransfer });
-  await expect(page.getByRole("region", { name: "Changed source" }).locator("strong")).toHaveText("second-drop.txt");
+  await expect(page.locator(".top-bar").getByText("first-drop.txt / second-drop.txt")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Original source" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Changed source" })).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(page.getByText("two separately dropped")).toBeVisible();
 });
 
-test("keeps source header height and scrolls long diffs", async ({ page }, testInfo) => {
+test("hides loaded source cards and scrolls long diffs", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1000, height: 360 });
 
   const leftFile = testInfo.outputPath("long-left.txt");
@@ -170,9 +174,8 @@ test("keeps source header height and scrolls long diffs", async ({ page }, testI
 
   await expect(page.getByText("Modified")).toBeVisible();
   await expect(page.locator("diffs-container")).toBeVisible();
-
-  const sourceGridBox = await page.locator(".source-grid").boundingBox();
-  expect(sourceGridBox?.height).toBeGreaterThanOrEqual(86);
+  await expect(page.getByRole("region", { name: "Original source" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Changed source" })).toHaveCount(0);
 
   await expect
     .poll(() =>
