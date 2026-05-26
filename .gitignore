@@ -1,0 +1,10 @@
+node_modules
+dist
+out
+release
+coverage
+test-results
+playwright-report
+build/icon.iconset
+*.log
+.DS_Store
