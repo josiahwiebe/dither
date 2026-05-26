@@ -14,6 +14,7 @@ import type {
 } from "../src/electron/bridge";
 
 const isDev = !app.isPackaged;
+const shouldOpenDevTools = process.env.DITHER_OPEN_DEVTOOLS === "1";
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const macOSWindowMaterial = "fullscreen-ui" satisfies NonNullable<BrowserWindowConstructorOptions["vibrancy"]>;
 
@@ -42,6 +43,7 @@ function createWindow() {
     title: "Dither",
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 14, y: 16 },
+    autoHideMenuBar: true,
     ...windowMaterialOptions(),
     webPreferences: {
       preload: join(currentDirectory, "../preload/index.cjs"),
@@ -51,8 +53,8 @@ function createWindow() {
     }
   });
 
-  mainWindow.setBackgroundColor("#00000000");
   if (process.platform === "darwin") {
+    mainWindow.setBackgroundColor("#00000000");
     mainWindow.setVibrancy(macOSWindowMaterial, { animationDuration: 160 });
   }
 
@@ -63,10 +65,14 @@ function createWindow() {
 
   if (isDev && process.env.ELECTRON_RENDERER_URL) {
     void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
-    mainWindow.webContents.openDevTools({ mode: "detach" });
+    if (shouldOpenDevTools) {
+      mainWindow.webContents.openDevTools({ mode: "detach" });
+    }
   } else {
     void mainWindow.loadFile(join(currentDirectory, "../renderer/index.html"));
   }
+
+  return mainWindow;
 }
 
 function toPickedSource(path: string, kind: DesktopSourceKind): DesktopPickedSource {
@@ -271,15 +277,17 @@ ipcMain.handle("dither:walk-directory", async (_event, source: DesktopPickedSour
 });
 
 app.whenReady().then(() => {
-  if (process.platform === "darwin") {
-    const dockIconPath = join(currentDirectory, "../../build/icon.png");
-    if (existsSync(dockIconPath)) {
-      app.dock?.setIcon(dockIconPath);
-    }
-  }
-
-  void mkdir(app.getPath("userData"), { recursive: true });
   createWindow();
+  void mkdir(app.getPath("userData"), { recursive: true });
+
+  if (process.platform === "darwin") {
+    setImmediate(() => {
+      const dockIconPath = join(currentDirectory, "../../build/icon.png");
+      if (existsSync(dockIconPath)) {
+        app.dock?.setIcon(dockIconPath);
+      }
+    });
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

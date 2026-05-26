@@ -19,10 +19,611 @@
       document.documentElement.dataset.theme = dark ? "dark" : "light";
       document.documentElement.dataset.platform = window.dither ? "desktop" : "browser";
     </script>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+        font-synthesis: none;
+        text-rendering: geometricPrecision;
+        --accent: #0a84ff;
+        --accent-strong: #006edb;
+        --bg: #eef1f4;
+        --browser-pane-border: rgb(24 31 38 / 10%);
+        --control: rgb(255 255 255 / 46%);
+        --control-hover: rgb(255 255 255 / 60%);
+        --control-pressed: rgb(255 255 255 / 32%);
+        --line: rgb(36 42 50 / 14%);
+        --line-strong: rgb(36 42 50 / 22%);
+        --muted: #636b75;
+        --panel: rgb(255 255 255 / 66%);
+        --panel-2: rgb(255 255 255 / 42%);
+        --pane-overlay-start: rgb(255 255 255 / 7%);
+        --pane-overlay-end: rgb(255 255 255 / 3%);
+        --shadow: 0 14px 34px rgb(25 32 40 / 10%), inset 0 1px 0 rgb(255 255 255 / 72%);
+        --shadow-tight: 0 7px 18px rgb(25 32 40 / 8%), inset 0 1px 0 rgb(255 255 255 / 72%);
+        --surface-blur: blur(24px) saturate(1.35);
+        --text: #15181c;
+        --warning: #ff9f0a;
+        --success: #248a3d;
+      }
+
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --accent: #3b9dff;
+        --accent-strong: #8ecaff;
+        --bg: #101216;
+        --browser-shell-surface: linear-gradient(180deg, #14283d 0%, #102235 100%);
+        --browser-pane-surface: linear-gradient(180deg, #315f7b 0%, #244b68 100%);
+        --browser-pane-border: rgb(255 255 255 / 14%);
+        --control: rgb(255 255 255 / 11%);
+        --control-hover: rgb(255 255 255 / 15%);
+        --control-pressed: rgb(255 255 255 / 8%);
+        --line: rgb(255 255 255 / 12%);
+        --line-strong: rgb(255 255 255 / 20%);
+        --muted: #a6afba;
+        --panel: rgb(31 34 40 / 62%);
+        --panel-2: rgb(255 255 255 / 9%);
+        --shadow: 0 14px 40px rgb(0 0 0 / 18%), inset 0 1px 0 rgb(255 255 255 / 12%);
+        --shadow-tight: 0 7px 22px rgb(0 0 0 / 16%), inset 0 1px 0 rgb(255 255 255 / 12%);
+        --surface-blur: blur(24px) saturate(1.38);
+        --text: #f4f6f8;
+        --warning: #ffd166;
+        --success: #30d158;
+      }
+
+      :root[data-platform='desktop'] {
+        --bg: transparent;
+        --control: rgb(255 255 255 / 10%);
+        --control-hover: rgb(255 255 255 / 16%);
+        --control-pressed: rgb(255 255 255 / 7%);
+        --line: rgb(255 255 255 / 18%);
+        --line-strong: rgb(255 255 255 / 28%);
+        --panel: rgb(255 255 255 / 11%);
+        --panel-2: rgb(255 255 255 / 8%);
+        --shadow-tight: inset 0 1px 0 rgb(255 255 255 / 10%);
+        --surface-blur: none;
+      }
+
+      :root[data-platform='desktop'][data-theme='light'] {
+        --control: rgb(255 255 255 / 18%);
+        --control-hover: rgb(255 255 255 / 27%);
+        --control-pressed: rgb(255 255 255 / 11%);
+        --line: rgb(26 31 37 / 9%);
+        --line-strong: rgb(26 31 37 / 15%);
+        --muted: rgb(23 26 31 / 62%);
+        --panel: rgb(255 255 255 / 12%);
+        --panel-2: rgb(255 255 255 / 9%);
+        --text: #171a1f;
+      }
+
+      :root[data-platform='desktop'][data-theme='dark'] {
+        --control: rgb(8 10 13 / 24%);
+        --control-hover: rgb(8 10 13 / 34%);
+        --control-pressed: rgb(8 10 13 / 18%);
+        --line: rgb(255 255 255 / 14%);
+        --line-strong: rgb(255 255 255 / 24%);
+        --muted: rgb(247 249 251 / 66%);
+        --panel: rgb(36 42 50 / 42%);
+        --panel-2: rgb(36 42 50 / 30%);
+        --shell-glow: rgb(16 20 24 / 12%);
+        --shell-tint-start: rgb(4 5 7 / 72%);
+        --shell-tint-end: rgb(2 3 5 / 82%);
+        --text: #f7f9fb;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body,
+      #root {
+        min-height: 100%;
+        margin: 0;
+      }
+
+      body {
+        overflow: hidden;
+        background:
+          linear-gradient(135deg, color-mix(in srgb, var(--accent) 13%, transparent), transparent 34%),
+          linear-gradient(180deg, color-mix(in srgb, var(--panel-2) 72%, var(--bg)), var(--bg));
+        color: var(--text);
+        font-size: 14px;
+      }
+
+      :root[data-platform='desktop'],
+      :root[data-platform='desktop'] body,
+      :root[data-platform='desktop'] #root {
+        background: transparent;
+      }
+
+      body::after {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background-image: repeating-linear-gradient(
+          0deg,
+          rgb(255 255 255 / 3%) 0,
+          rgb(255 255 255 / 3%) 1px,
+          transparent 1px,
+          transparent 3px
+        );
+        content: '';
+        opacity: 0.5;
+      }
+
+      :root[data-platform='desktop'] body::after {
+        opacity: 0;
+      }
+
+      button {
+        border: 0;
+        font: inherit;
+      }
+
+      [data-boot-shell] {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        height: 100vh;
+        padding: 10px 14px 14px;
+      }
+
+      :root[data-theme='dark']:not([data-platform='desktop']) [data-boot-shell] {
+        background: var(--browser-shell-surface);
+      }
+
+      :root[data-platform='desktop'] [data-boot-shell] {
+        gap: 10px;
+        padding: 12px;
+        background: transparent;
+      }
+
+      :root[data-platform='desktop'][data-theme='dark'] [data-boot-shell] {
+        background:
+          radial-gradient(circle at 50% -18%, var(--shell-glow), transparent 46%),
+          linear-gradient(180deg, var(--shell-tint-start), var(--shell-tint-end));
+      }
+
+      [data-boot-shell] .liquid-veil {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background:
+          linear-gradient(115deg, rgb(255 255 255 / 22%), transparent 32%),
+          linear-gradient(300deg, color-mix(in srgb, var(--warning) 10%, transparent), transparent 42%),
+          linear-gradient(22deg, transparent 54%, color-mix(in srgb, var(--success) 9%, transparent));
+        filter: saturate(1.08);
+        opacity: 0.9;
+      }
+
+      :root[data-platform='desktop'] [data-boot-shell] .liquid-veil {
+        display: none;
+      }
+
+      [data-boot-shell] .top-bar {
+        -webkit-app-region: drag;
+        display: grid;
+        flex: 0 0 auto;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        min-height: 54px;
+      }
+
+      :root[data-platform='desktop'] [data-boot-shell] .top-bar {
+        grid-template-columns: 82px minmax(0, 1fr) auto;
+        min-height: 48px;
+      }
+
+      :root[data-platform='browser'] [data-boot-shell] .top-bar--browser {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        min-height: 0;
+      }
+
+      [data-boot-shell] .top-bar__masthead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-width: 0;
+        min-height: 54px;
+      }
+
+      [data-boot-shell] .traffic-spacer {
+        display: none;
+      }
+
+      :root[data-platform='desktop'] [data-boot-shell] .traffic-spacer {
+        display: block;
+        min-width: 82px;
+      }
+
+      [data-boot-shell] .brand-lockup,
+      [data-boot-shell] .top-bar__actions,
+      [data-boot-shell] .toolbar-pillbar,
+      [data-boot-shell] .primary-button,
+      [data-boot-shell] .empty-state__actions {
+        display: flex;
+        align-items: center;
+      }
+
+      [data-boot-shell] .brand-lockup {
+        gap: 10px;
+        width: fit-content;
+        min-width: 0;
+        padding: 6px 9px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: transparent;
+        color: inherit;
+        text-align: left;
+      }
+
+      :root[data-platform='desktop'] [data-boot-shell] .brand-lockup {
+        gap: 8px;
+        padding: 3px 7px;
+      }
+
+      [data-boot-shell] .brand-logo {
+        display: block;
+        width: 102px;
+        height: auto;
+      }
+
+      :root[data-theme='dark'] [data-boot-shell] .brand-logo {
+        filter: invert(1);
+      }
+
+      :root[data-platform='desktop'] [data-boot-shell] .brand-logo {
+        width: 92px;
+      }
+
+      [data-boot-shell] .toolbar-pillbar {
+        -webkit-app-region: no-drag;
+        gap: 1px;
+        padding: 2px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--control);
+      }
+
+      [data-boot-shell] .toolbar-pillbar__button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        min-height: 0;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: 5px;
+        background: transparent;
+        color: var(--text);
+      }
+
+      :root[data-platform='desktop'] [data-boot-shell] .toolbar-pillbar__button {
+        width: 30px;
+        height: 28px;
+        font-size: 13px;
+      }
+
+      [data-boot-shell] .toolbar-pillbar__button svg {
+        display: block;
+        flex-shrink: 0;
+      }
+
+      [data-boot-shell] .boot-header,
+      [data-boot-shell] .toolbar-pillbar__button .boot-theme-icon {
+        display: none;
+      }
+
+      :root[data-platform='desktop'] [data-boot-shell] .boot-header--desktop {
+        display: grid;
+      }
+
+      :root[data-platform='browser'] [data-boot-shell] .boot-header--browser {
+        display: flex;
+      }
+
+      :root[data-theme='dark'] [data-boot-shell] .toolbar-pillbar__button .boot-theme-icon--sun,
+      :root[data-theme='light'] [data-boot-shell] .toolbar-pillbar__button .boot-theme-icon--moon {
+        display: block;
+      }
+
+      [data-boot-shell] .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        flex: 1 1 0;
+        gap: 12px;
+        min-height: 0;
+      }
+
+      :root[data-platform='desktop'] [data-boot-shell] .workspace {
+        gap: 0;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: linear-gradient(180deg, var(--pane-overlay-start), var(--pane-overlay-end)), var(--panel);
+        box-shadow: var(--shadow-tight);
+      }
+
+      [data-boot-shell] .preview-pane {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        backdrop-filter: var(--surface-blur);
+      }
+
+      :root[data-theme='dark']:not([data-platform='desktop']) [data-boot-shell] .preview-pane {
+        border-color: var(--browser-pane-border);
+        background: var(--browser-pane-surface);
+      }
+
+      :root[data-platform='desktop'] [data-boot-shell] .preview-pane {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        backdrop-filter: none;
+      }
+
+      [data-boot-shell] .empty-state {
+        display: grid;
+        grid-template-rows: minmax(230px, 42%) minmax(0, 1fr);
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+        background: color-mix(in srgb, var(--panel) 78%, transparent);
+      }
+
+      [data-boot-shell] .empty-state__hero {
+        position: relative;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        background: linear-gradient(160deg, #b4c2cf 0%, #9aadb9 48%, #8499a8 100%);
+        isolation: isolate;
+      }
+
+      :root[data-theme='dark'] [data-boot-shell] .empty-state__hero {
+        background: linear-gradient(160deg, #3f5d74 0%, #355268 52%, #2c4659 100%);
+      }
+
+      [data-boot-shell] .empty-state__hero::before,
+      [data-boot-shell] .empty-state__hero::after {
+        position: absolute;
+        inset: -16%;
+        z-index: -1;
+        pointer-events: none;
+        content: '';
+      }
+
+      [data-boot-shell] .empty-state__hero::before {
+        background:
+          linear-gradient(110deg, transparent 0 36%, rgb(255 255 255 / 7%) 36% 37%, transparent 37% 100%),
+          linear-gradient(132deg, transparent 0 47%, rgb(255 255 255 / 6%) 47% 48%, transparent 48% 100%),
+          linear-gradient(156deg, transparent 0 58%, rgb(230 240 248 / 5%) 58% 59%, transparent 59% 100%);
+        transform: skewX(-8deg);
+      }
+
+      [data-boot-shell] .empty-state__hero::after {
+        background:
+          linear-gradient(120deg, transparent 0 42%, rgb(255 255 255 / 6%) 42% 62%, transparent 62% 100%),
+          linear-gradient(300deg, transparent 0 48%, rgb(214 228 240 / 5%) 48% 68%, transparent 68% 100%);
+        mix-blend-mode: soft-light;
+      }
+
+      [data-boot-shell] .empty-state__drop-mark {
+        display: grid;
+        place-items: center;
+        gap: 12px;
+        min-width: min(310px, 72%);
+        min-height: 190px;
+        padding: 32px;
+        border: 1px solid rgb(255 255 255 / 20%);
+        border-radius: 14px;
+        background: rgb(255 255 255 / 18%);
+        color: rgb(36 52 68 / 78%);
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / 22%);
+        text-align: center;
+      }
+
+      :root[data-theme='dark'] [data-boot-shell] .empty-state__drop-mark {
+        border-color: rgb(255 255 255 / 14%);
+        background: rgb(255 255 255 / 10%);
+        color: rgb(232 240 248 / 86%);
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%);
+      }
+
+      [data-boot-shell] .empty-state__drop-mark svg {
+        color: currentColor;
+        filter: drop-shadow(0 10px 18px rgb(20 36 52 / 16%));
+      }
+
+      [data-boot-shell] .empty-state__drop-mark strong {
+        color: currentColor;
+        font-size: clamp(18px, 2vw, 24px);
+        font-weight: 720;
+        letter-spacing: 0;
+        line-height: 1.1;
+      }
+
+      [data-boot-shell] .empty-state__body {
+        display: grid;
+        place-items: center;
+        align-content: center;
+        gap: 22px;
+        min-height: 0;
+        padding: clamp(28px, 5vw, 58px) 24px;
+        background: color-mix(in srgb, var(--panel) 88%, rgb(255 255 255 / 64%));
+        text-align: center;
+      }
+
+      :root[data-theme='dark'] [data-boot-shell] .empty-state__body {
+        background: color-mix(in srgb, var(--panel) 78%, rgb(5 7 10 / 58%));
+      }
+
+      :root[data-theme='dark']:not([data-platform='desktop']) [data-boot-shell] .empty-state,
+      :root[data-theme='dark']:not([data-platform='desktop']) [data-boot-shell] .empty-state__body {
+        background: var(--browser-pane-surface);
+      }
+
+      :root[data-platform='desktop'][data-theme='dark'] [data-boot-shell] .empty-state,
+      :root[data-platform='desktop'][data-theme='dark'] [data-boot-shell] .empty-state__body {
+        background: linear-gradient(180deg, var(--pane-overlay-start), var(--pane-overlay-end)), var(--panel);
+      }
+
+      [data-boot-shell] .empty-state__copy {
+        display: grid;
+        gap: 8px;
+        max-width: 640px;
+      }
+
+      [data-boot-shell] .empty-state__copy strong {
+        color: var(--text);
+        font-size: 18px;
+        font-weight: 720;
+        line-height: 1.2;
+      }
+
+      [data-boot-shell] .empty-state__copy span {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      [data-boot-shell] .empty-state__actions {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+      }
+
+      [data-boot-shell] .primary-button {
+        justify-content: center;
+        gap: 7px;
+        min-width: 108px;
+        min-height: 42px;
+        padding: 0 18px;
+        border: 1px solid color-mix(in srgb, var(--accent) 48%, transparent);
+        border-radius: 999px;
+        background: linear-gradient(180deg, rgb(255 255 255 / 22%), transparent), var(--accent);
+        color: #fff;
+        font-weight: 700;
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / 22%);
+      }
+
+      @media (max-width: 980px) {
+        body {
+          overflow: auto;
+        }
+
+        [data-boot-shell] {
+          height: auto;
+          min-height: 100vh;
+        }
+      }
+    </style>
     <title>Dither</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main class="app-shell" data-boot-shell="true">
+        <div class="liquid-veil" aria-hidden="true"></div>
+        <header class="top-bar boot-header boot-header--desktop">
+          <div class="traffic-spacer" aria-hidden="true"></div>
+          <div class="brand-lockup">
+            <img class="brand-logo" src="./dither-logo.svg" alt="Dither" />
+          </div>
+          <div class="top-bar__actions">
+            <div class="toolbar-pillbar" role="toolbar" aria-label="Comparison toolbar">
+              <button type="button" class="toolbar-pillbar__button" aria-label="Switch theme">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="boot-theme-icon boot-theme-icon--sun lucide lucide-sun" aria-hidden="true">
+                  <circle cx="12" cy="12" r="4"></circle>
+                  <path d="M12 2v2"></path>
+                  <path d="M12 20v2"></path>
+                  <path d="m4.93 4.93 1.41 1.41"></path>
+                  <path d="m17.66 17.66 1.41 1.41"></path>
+                  <path d="M2 12h2"></path>
+                  <path d="M20 12h2"></path>
+                  <path d="m6.34 17.66-1.41 1.41"></path>
+                  <path d="m19.07 4.93-1.41 1.41"></path>
+                </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="boot-theme-icon boot-theme-icon--moon lucide lucide-moon" aria-hidden="true">
+                  <path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </header>
+        <header class="top-bar top-bar--browser boot-header boot-header--browser">
+          <div class="top-bar__masthead">
+            <button type="button" class="brand-lockup brand-lockup--home" aria-label="Return to start" disabled>
+              <img class="brand-logo" src="./dither-logo.svg" alt="Dither" />
+            </button>
+            <div class="top-bar__actions">
+              <div class="toolbar-pillbar" role="toolbar" aria-label="App toolbar">
+                <button type="button" class="toolbar-pillbar__button" aria-label="Switch theme">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="boot-theme-icon boot-theme-icon--sun lucide lucide-sun" aria-hidden="true">
+                    <circle cx="12" cy="12" r="4"></circle>
+                    <path d="M12 2v2"></path>
+                    <path d="M12 20v2"></path>
+                    <path d="m4.93 4.93 1.41 1.41"></path>
+                    <path d="m17.66 17.66 1.41 1.41"></path>
+                    <path d="M2 12h2"></path>
+                    <path d="M20 12h2"></path>
+                    <path d="m6.34 17.66-1.41 1.41"></path>
+                    <path d="m19.07 4.93-1.41 1.41"></path>
+                  </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="boot-theme-icon boot-theme-icon--moon lucide lucide-moon" aria-hidden="true">
+                    <path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <section class="workspace workspace--single">
+          <section class="preview-pane" aria-label="Diff preview">
+            <div class="empty-state">
+              <div class="empty-state__hero" aria-hidden="true">
+                <div class="empty-state__drop-mark">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="58" height="58" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-files" aria-hidden="true">
+                    <path d="M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8"></path>
+                    <path d="M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z"></path>
+                    <path d="M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1"></path>
+                  </svg>
+                  <strong>Drop files here</strong>
+                </div>
+              </div>
+              <div class="empty-state__body">
+                <div class="empty-state__copy">
+                  <strong>Start a comparison</strong>
+                  <span>Open a file or folder pair, or drop two matching items into Dither.</span>
+                </div>
+                <div class="empty-state__actions">
+                  <button type="button" class="primary-button primary-button--large">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-upload" aria-hidden="true">
+                      <path d="M12 3v12"></path>
+                      <path d="m17 8-5-5-5 5"></path>
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    </svg>
+                    Open
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

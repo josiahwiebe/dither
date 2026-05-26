@@ -1,7 +1,17 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { zipSync } from "fflate";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+
+async function pickSourcePair(page: Page, leftFile: string, rightFile: string) {
+  const leftChooserPromise = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Open" }).click();
+  await (await leftChooserPromise).setFiles(leftFile);
+
+  const rightChooserPromise = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Add changed" }).click();
+  await (await rightChooserPromise).setFiles(rightFile);
+}
 
 function minimalDocxBytes(lines: string[]) {
   const paragraphs = lines.map((line) => `<w:p><w:r><w:t>${line}</w:t></w:r></w:p>`).join("");
@@ -23,14 +33,7 @@ test("compares two browser-local docx files as text", async ({ page }, testInfo)
   await writeFile(rightFile, minimalDocxBytes(["Clause one", "Clause two changed"]));
 
   await page.goto("/");
-
-  const leftChooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("region", { name: "Original source" }).getByRole("button", { name: "Open" }).click();
-  await (await leftChooserPromise).setFiles(leftFile);
-
-  const rightChooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("region", { name: "Changed source" }).getByRole("button", { name: "Open" }).click();
-  await (await rightChooserPromise).setFiles(rightFile);
+  await pickSourcePair(page, leftFile, rightFile);
 
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(page.getByText("Binary files are compared by bytes and metadata in v1.")).toHaveCount(0);

@@ -1,6 +1,16 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+
+async function pickSourcePair(page: Page, leftFile: string, rightFile: string) {
+  const leftChooserPromise = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Open" }).click();
+  await (await leftChooserPromise).setFiles(leftFile);
+
+  const rightChooserPromise = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Add changed" }).click();
+  await (await rightChooserPromise).setFiles(rightFile);
+}
 
 test("compares two browser-local text files", async ({ page }, testInfo) => {
   const leftFile = testInfo.outputPath("left-note.txt");
@@ -11,14 +21,7 @@ test("compares two browser-local text files", async ({ page }, testInfo) => {
   await writeFile(rightFile, "alpha\nbravo changed\ncharlie\n");
 
   await page.goto("/");
-
-  const leftChooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("region", { name: "Original source" }).getByRole("button", { name: "Open" }).click();
-  await (await leftChooserPromise).setFiles(leftFile);
-
-  const rightChooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("region", { name: "Changed source" }).getByRole("button", { name: "Open" }).click();
-  await (await rightChooserPromise).setFiles(rightFile);
+  await pickSourcePair(page, leftFile, rightFile);
 
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(page.getByText("Modified")).toBeVisible();
@@ -33,14 +36,7 @@ test("supports header controls and custom diff headers", async ({ page }, testIn
   await writeFile(leftFile, "export function Demo() {\n  return <span>old</span>;\n}\n");
   await writeFile(rightFile, "export function Demo() {\n  return <span>new</span>;\n}\n");
   await page.goto("/");
-
-  const leftChooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("region", { name: "Original source" }).getByRole("button", { name: "Open" }).click();
-  await (await leftChooserPromise).setFiles(leftFile);
-
-  const rightChooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("region", { name: "Changed source" }).getByRole("button", { name: "Open" }).click();
-  await (await rightChooserPromise).setFiles(rightFile);
+  await pickSourcePair(page, leftFile, rightFile);
 
   await expect(page.locator(".top-bar").getByText("controls-left.tsx / controls-right.tsx")).toBeVisible();
   await expect(page.getByText("1 additions")).toBeVisible();
@@ -74,11 +70,11 @@ test("supports header controls and custom diff headers", async ({ page }, testIn
   await expect(page.getByRole("region", { name: "Changed source" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Reset comparison" }).click();
-  await expect(page.getByRole("region", { name: "Original source" }).locator("strong")).toHaveText("No source selected");
-  await expect(page.getByRole("region", { name: "Changed source" }).locator("strong")).toHaveText("No source selected");
+  await expect(page.getByRole("region", { name: "Original source" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Changed source" })).toHaveCount(0);
   await expect(page.getByText("Drop files here")).toBeVisible();
   await expect(page.getByText("Start a comparison")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open" })).toHaveCount(3);
+  await expect(page.getByRole("button", { name: "Open" })).toHaveCount(1);
 });
 
 test("loads a dropped browser file pair", async ({ page }) => {
@@ -135,7 +131,8 @@ test("compares after two separate browser file drops", async ({ page }) => {
   expect(Math.round(leftOverlayBox?.width ?? -1)).toBe(Math.round((viewport?.width ?? 0) / 2 - 16));
 
   await page.locator(".app-shell").dispatchEvent("drop", { clientX: 120, dataTransfer: leftTransfer });
-  await expect(page.getByRole("region", { name: "Original source" }).locator("strong")).toHaveText("first-drop.txt");
+  await expect(page.getByText("first-drop.txt is ready")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add changed" })).toBeVisible();
 
   await page.locator(".app-shell").dispatchEvent("dragenter", { clientX: 900, dataTransfer: rightTransfer });
   await expect(page.getByText("Drop to set Changed")).toBeVisible();
@@ -151,7 +148,7 @@ test("compares after two separate browser file drops", async ({ page }) => {
   await expect(page.getByText("two separately dropped")).toBeVisible();
 });
 
-test("hides loaded source cards and scrolls long diffs", async ({ page }, testInfo) => {
+test("keeps the source picker row removed and scrolls long diffs", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1000, height: 360 });
 
   const leftFile = testInfo.outputPath("long-left.txt");
@@ -163,14 +160,7 @@ test("hides loaded source cards and scrolls long diffs", async ({ page }, testIn
   await writeFile(leftFile, leftText);
   await writeFile(rightFile, rightText);
   await page.goto("/");
-
-  const leftChooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("region", { name: "Original source" }).getByRole("button", { name: "Open" }).click();
-  await (await leftChooserPromise).setFiles(leftFile);
-
-  const rightChooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("region", { name: "Changed source" }).getByRole("button", { name: "Open" }).click();
-  await (await rightChooserPromise).setFiles(rightFile);
+  await pickSourcePair(page, leftFile, rightFile);
 
   await expect(page.getByText("Modified")).toBeVisible();
   await expect(page.locator("diffs-container")).toBeVisible();
@@ -204,14 +194,7 @@ test("renders the diff viewer with the app dark theme", async ({ page }, testInf
   await writeFile(rightFile, "one\ntwo changed\nthree\n");
   await page.addInitScript(() => localStorage.setItem("dither.theme", "light"));
   await page.goto("/");
-
-  const leftChooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("region", { name: "Original source" }).getByRole("button", { name: "Open" }).click();
-  await (await leftChooserPromise).setFiles(leftFile);
-
-  const rightChooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("region", { name: "Changed source" }).getByRole("button", { name: "Open" }).click();
-  await (await rightChooserPromise).setFiles(rightFile);
+  await pickSourcePair(page, leftFile, rightFile);
 
   await expect(page.getByText("two changed")).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");

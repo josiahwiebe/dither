@@ -172,7 +172,6 @@ button {
   gap: 12px;
   height: 100vh;
   padding: 10px 14px 14px;
-  animation: shell-in 260ms var(--ease-out);
 }
 
 :root[data-theme='dark']:not([data-platform='desktop']) .app-shell {
@@ -721,6 +720,27 @@ button.brand-lockup--home:not(:disabled):hover {
 .toolbar-pillbar__button svg {
   display: block;
   flex-shrink: 0;
+}
+
+.boot-header {
+  display: none;
+}
+
+:root[data-platform='desktop'] .boot-header--desktop {
+  display: grid;
+}
+
+:root[data-platform='browser'] .boot-header--browser {
+  display: flex;
+}
+
+.toolbar-pillbar__button .boot-theme-icon {
+  display: none;
+}
+
+:root[data-theme='dark'] .toolbar-pillbar__button .boot-theme-icon--sun,
+:root[data-theme='light'] .toolbar-pillbar__button .boot-theme-icon--moon {
+  display: block;
 }
 
 .toolbar-pillbar__button.is-active {
@@ -1552,13 +1572,6 @@ diffs-container {
 @keyframes spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-@keyframes shell-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
   }
 }
 

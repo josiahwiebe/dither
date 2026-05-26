@@ -17,7 +17,6 @@ import type { DragEvent } from "react";
 
 import { createFileSystemAdapter } from "./adapters/fileSystem";
 import { FileKindIcon } from "./components/FileKindIcon";
-import { SourceSlot } from "./components/SourceSlot";
 import { StatusFilterBar } from "./components/StatusFilterBar";
 import { compareSources } from "./lib/compare";
 import { filterTreeNodes, searchNodes } from "./lib/filters";
@@ -335,7 +334,6 @@ export function App() {
   const selectedSource = leftSource ?? rightSource;
   const isDesktop = adapter.platform === "desktop";
   const canReset = hasSources || readyComparison !== null || session.type !== "idle";
-  const showSourceGrid = !canCompare;
   const showWebHeaderSecondary =
     !isDesktop && (readyComparison !== null || hasSources || session.type === "scanning");
 
@@ -493,27 +491,6 @@ export function App() {
             </>
           )}
         </header>
-
-      {showSourceGrid ? (
-        <section className="source-grid" aria-label="Comparison sources">
-          <SourceSlot
-            isDragActive={dropTarget === "left" || dropTarget === "app"}
-            side="left"
-            source={leftSource}
-            onPick={() => void pickSource("left")}
-            onSourceDragHover={(event) => setDropTarget(getTargetedDropZone(event))}
-            onSourceDrop={(event) => void acceptDrop(event, "left")}
-          />
-          <SourceSlot
-            isDragActive={dropTarget === "right" || dropTarget === "app"}
-            side="right"
-            source={rightSource}
-            onPick={() => void pickSource("right")}
-            onSourceDragHover={(event) => setDropTarget(getTargetedDropZone(event))}
-            onSourceDrop={(event) => void acceptDrop(event, "right")}
-          />
-        </section>
-      ) : null}
 
       {session.type === "failed" ? (
         <div className="error-banner" role="alert">
