@@ -39,3 +39,23 @@ test("compares two browser-local docx files as text", async ({ page }, testInfo)
   await expect(page.getByText("Binary files are compared by bytes and metadata in v1.")).toHaveCount(0);
   await expect(page.getByText("Clause two changed")).toBeVisible();
 });
+
+test("counts docx change blocks inside a single hunk", async ({ page }, testInfo) => {
+  const leftFile = testInfo.outputPath("left-doc-blocks.docx");
+  const rightFile = testInfo.outputPath("right-doc-blocks.docx");
+
+  await mkdir(dirname(leftFile), { recursive: true });
+  await writeFile(leftFile, minimalDocxBytes(["One", "Two old", "Three", "Four old", "Five"]));
+  await writeFile(rightFile, minimalDocxBytes(["One", "Two new", "Three", "Four new", "Five"]));
+
+  await page.goto("/");
+  await pickSourcePair(page, leftFile, rightFile);
+
+  await expect(page.getByText("Change set 1 of 2")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Previous change" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Next change" })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Next change" }).click();
+  await expect(page.getByText("Change set 2 of 2")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Next change" })).toBeDisabled();
+});

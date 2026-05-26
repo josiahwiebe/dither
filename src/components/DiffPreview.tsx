@@ -18,7 +18,7 @@ interface DiffPreviewProps {
 }
 
 const customHeaderMetrics: VirtualFileMetrics = {
-  diffHeaderHeight: 96,
+  diffHeaderHeight: 86,
   hunkLineCount: 50,
   lineHeight: 22,
   paddingBottom: 10,
@@ -159,6 +159,43 @@ function countChangedLines(fileDiff: FileDiffMetadata) {
   );
 }
 
+function getDiffChangeSetTargets(fileDiff: FileDiffMetadata | null, diffViewMode: "split" | "unified") {
+  if (!fileDiff) return [];
+
+  return fileDiff.hunks.flatMap((hunk) => {
+    let lineOffset = 0;
+
+    return hunk.hunkContent.flatMap((content) => {
+      if (content.type === "context") {
+        lineOffset += content.lines;
+        return [];
+      }
+
+      const target = {
+        top:
+          customHeaderMetrics.diffHeaderHeight +
+          ((diffViewMode === "split" ? hunk.splitLineStart : hunk.unifiedLineStart) + lineOffset) *
+            customHeaderMetrics.lineHeight
+      };
+
+      lineOffset += diffViewMode === "split" ? Math.max(content.additions, content.deletions) : content.additions + content.deletions;
+      return content.additions > 0 || content.deletions > 0 ? [target] : [];
+    });
+  });
+}
+
+function getFileDiffSignature(fileDiff: FileDiffMetadata) {
+  const changedLines = countChangedLines(fileDiff);
+  return [
+    fileDiff.cacheKey,
+    fileDiff.splitLineCount,
+    fileDiff.unifiedLineCount,
+    fileDiff.hunks.length,
+    changedLines.additions,
+    changedLines.deletions
+  ].join(":");
+}
+
 function formatBytes(bytes: number | null | undefined) {
   if (bytes == null) return "Missing";
   if (bytes < 1024) return `${bytes.toLocaleString()} B`;
@@ -216,14 +253,14 @@ function DiffFileHeader({
   fileDiff,
   leftFile,
   leftName,
-  onChangeTotal,
+  onFileDiff,
   rightFile,
   rightName
 }: {
   fileDiff: FileDiffMetadata;
   leftFile: ReadFileResult | null;
   leftName: string;
-  onChangeTotal: (changes: number) => void;
+  onFileDiff: (fileDiff: FileDiffMetadata) => void;
   rightFile: ReadFileResult | null;
   rightName: string;
 }) {
@@ -232,14 +269,13 @@ function DiffFileHeader({
   const title = getCustomHeaderTitle(leftName, rightName);
 
   useEffect(() => {
-    onChangeTotal(Math.max(1, changes));
-  }, [changes, onChangeTotal]);
+    onFileDiff(fileDiff);
+  }, [fileDiff, onFileDiff]);
 
   return (
     <div className="diff-file-header">
-      <FileKindIcon path={rightName} />
-      <div className="diff-file-header__text">
-        <strong>{title}</strong>
+      <div className="diff-file-header__summary" aria-label={`Diff for ${title}`} title={title}>
+        <FileKindIcon path={rightName} />
         <div className="diff-file-header__stats" aria-label="Diff statistics">
           <span className="diff-stat diff-stat--add">
             <Plus size={12} aria-hidden="true" />
@@ -275,11 +311,14 @@ function DiffFileHeader({
 export function DiffPreview({ adapter, collapseUnchanged, comparison, diffViewMode, node, theme }: DiffPreviewProps) {
   const [state, setState] = useState<PreviewState>({ type: "idle" });
   const [currentChange, setCurrentChange] = useState(1);
-  const [changeTotal, setChangeTotal] = useState(1);
+  const [fileDiff, setFileDiff] = useState<FileDiffMetadata | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
-  const updateChangeTotal = useCallback((nextTotal: number) => {
-    setChangeTotal(nextTotal);
-    setCurrentChange((current) => Math.min(current, nextTotal));
+  const updateFileDiff = useCallback((nextFileDiff: FileDiffMetadata) => {
+    setFileDiff((currentFileDiff) =>
+      currentFileDiff && getFileDiffSignature(currentFileDiff) === getFileDiffSignature(nextFileDiff)
+        ? currentFileDiff
+        : nextFileDiff
+    );
   }, []);
   const workerPoolOptions = useMemo(createWorkerPoolOptions, []);
   const highlighterOptions = useMemo(
@@ -317,6 +356,7 @@ export function DiffPreview({ adapter, collapseUnchanged, comparison, diffViewMo
 
     const controller = new AbortController();
     setCurrentChange(1);
+    setFileDiff(null);
     setState({ type: "loading" });
 
     readPreviewPair(adapter, comparison, node, controller.signal)
@@ -335,6 +375,39 @@ export function DiffPreview({ adapter, collapseUnchanged, comparison, diffViewMo
 
     return () => controller.abort();
   }, [adapter, comparison, node]);
+
+  const changeTargets = useMemo(() => getDiffChangeSetTargets(fileDiff, diffViewMode), [diffViewMode, fileDiff]);
+  const fileDiffSignature = fileDiff ? getFileDiffSignature(fileDiff) : "";
+  const readyKey =
+    state.type === "ready"
+      ? `${node?.path ?? ""}:${state.left?.contentHash ?? "missing"}:${state.right?.contentHash ?? "missing"}`
+      : "";
+
+  useEffect(() => {
+    const targetCount = changeTargets.length;
+    setCurrentChange((current) => Math.min(Math.max(current, 1), Math.max(targetCount, 1)));
+  }, [changeTargets.length]);
+
+  useEffect(() => {
+    if (!readyKey || !fileDiffSignature) return;
+    const resetScroll = () => {
+      const virtualizer = previewRef.current?.querySelector<HTMLElement>(".diff-virtualizer");
+      if (virtualizer) virtualizer.scrollTop = 0;
+      setCurrentChange(1);
+    };
+
+    let secondFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(resetScroll);
+    });
+    const lateReset = window.setTimeout(resetScroll, 300);
+
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+      window.clearTimeout(lateReset);
+    };
+  }, [fileDiffSignature, readyKey]);
 
   if (!comparison || !node) {
     return (
@@ -391,15 +464,22 @@ export function DiffPreview({ adapter, collapseUnchanged, comparison, diffViewMo
 
   function scrollDiff(direction: "next" | "previous") {
     const virtualizer = previewRef.current?.querySelector<HTMLElement>(".diff-virtualizer");
+    if (!virtualizer || changeTargets.length === 0) return;
+
     setCurrentChange((current) => {
-      if (direction === "next") return current >= changeTotal ? 1 : current + 1;
-      return current <= 1 ? changeTotal : current - 1;
-    });
-    virtualizer?.scrollBy({
-      behavior: "smooth",
-      top: direction === "next" ? 360 : -360
+      const next =
+        direction === "next" ? Math.min(current + 1, changeTargets.length) : Math.max(current - 1, 1);
+      const nextTop = changeTargets[next - 1]?.top ?? changeTargets[0]?.top ?? 0;
+      virtualizer.scrollTo({
+        behavior: "smooth",
+        top: Math.max(0, nextTop - 12)
+      });
+      return next;
     });
   }
+
+  const changeTargetCount = changeTargets.length;
+  const hasChangeTargets = changeTargetCount > 0;
 
   return (
     <WorkerPoolContextProvider highlighterOptions={highlighterOptions} poolOptions={workerPoolOptions}>
@@ -437,7 +517,7 @@ export function DiffPreview({ adapter, collapseUnchanged, comparison, diffViewMo
                 fileDiff={fileDiff}
                 leftFile={state.left}
                 leftName={names.left}
-                onChangeTotal={updateChangeTotal}
+                onFileDiff={updateFileDiff}
                 rightFile={state.right}
                 rightName={names.right}
               />
@@ -447,14 +527,26 @@ export function DiffPreview({ adapter, collapseUnchanged, comparison, diffViewMo
         <div className="diff-change-bar">
           <div>
             <strong>
-              Change {currentChange.toLocaleString()} of {changeTotal.toLocaleString()}
+              {hasChangeTargets
+                ? `Change set ${currentChange.toLocaleString()} of ${changeTargetCount.toLocaleString()}`
+                : "No change sets"}
             </strong>
           </div>
           <div className="diff-change-bar__actions">
-            <button type="button" aria-label="Previous change" onClick={() => scrollDiff("previous")}>
+            <button
+              type="button"
+              aria-label="Previous change"
+              disabled={!hasChangeTargets || currentChange <= 1}
+              onClick={() => scrollDiff("previous")}
+            >
               <ChevronUp size={16} aria-hidden="true" />
             </button>
-            <button type="button" aria-label="Next change" onClick={() => scrollDiff("next")}>
+            <button
+              type="button"
+              aria-label="Next change"
+              disabled={!hasChangeTargets || currentChange >= changeTargetCount}
+              onClick={() => scrollDiff("next")}
+            >
               <ChevronDown size={16} aria-hidden="true" />
             </button>
           </div>

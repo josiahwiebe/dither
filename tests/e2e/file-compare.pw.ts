@@ -42,13 +42,10 @@ test("supports header controls and custom diff headers", async ({ page }, testIn
   await expect(page.getByText("1 additions")).toBeVisible();
   await expect(page.getByText("1 deletions")).toBeVisible();
   await expect(page.getByText("2 changes")).toBeVisible();
-  await expect(page.getByText("Change 1 of 2")).toBeVisible();
+  await expect(page.getByText("Change set 1 of 1")).toBeVisible();
   await expect(page.getByText("TSX").first()).toBeVisible();
-
-  await page.getByRole("button", { name: "Next change" }).click();
-  await expect(page.getByText("Change 2 of 2")).toBeVisible();
-  await page.getByRole("button", { name: "Next change" }).click();
-  await expect(page.getByText("Change 1 of 2")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Previous change" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Next change" })).toBeDisabled();
 
   await page.getByRole("button", { name: "Unified diff" }).click();
   await expect(page.getByRole("button", { name: "Unified diff" })).toHaveAttribute("aria-pressed", "true");
